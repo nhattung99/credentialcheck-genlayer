@@ -14,7 +14,7 @@ The product is one contract plus a thin public UI. It does not move value, split
 
 ## Live App
 
-Production URL is recorded here after the Vercel deploy returns HTTP 200.
+https://credentialcheck-genlayer.vercel.app
 
 ## Deployed Contract
 
@@ -30,7 +30,7 @@ Production URL is recorded here after the Vercel deploy returns HTTP 200.
 | Contract | `0xE964856aAee2DBC1953bb6948993c7408188a6E0` |
 | Explorer | https://genlayer-explorer.vercel.app/address/0xE964856aAee2DBC1953bb6948993c7408188a6E0 |
 | `VITE_CONTRACT_ADDRESS` | Set in `frontend/.env` and in the Vercel production environment |
-| Live app | Pending the production deploy check |
+| Live app | https://credentialcheck-genlayer.vercel.app |
 
 Until the address is set, the frontend boots in preview mode: a banner explains that writes and on-chain reads are off, and the page does not crash.
 
