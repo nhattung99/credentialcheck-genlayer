@@ -29,16 +29,16 @@ export function studioRpcUrl(origin) {
   return `${origin.replace(/\/$/, '')}/api/genlayer`;
 }
 
-export function formatWalletError(err, fallback = 'Yêu cầu ví thất bại') {
+export function formatWalletError(err, fallback = 'Wallet request failed') {
   const raw = `${err?.shortMessage || ''} ${err?.details || ''} ${err?.message || ''}`.toLowerCase();
   if (raw.includes('user rejected') || raw.includes('user denied') || raw.includes('user cancel')) {
-    return 'MetaMask đã hủy yêu cầu. Chuyển sang Genlayer Studio Network rồi bấm Confirm.';
+    return 'MetaMask cancelled the request. Switch to Genlayer Studio Network, then click Confirm.';
   }
   if (raw.includes('no address provided') || raw.includes('no account')) {
-    return 'Hãy kết nối ví trước, rồi thử lại.';
+    return 'Connect a wallet first, then try again.';
   }
   if (raw.includes('unrecognized chain') || raw.includes('chain disconnected') || raw.includes('4902')) {
-    return 'Hãy chấp nhận thêm Genlayer Studio Network trong MetaMask, rồi gửi lại giao dịch.';
+    return 'Approve adding Genlayer Studio Network in MetaMask, then send the transaction again.';
   }
   return err?.shortMessage || err?.message || fallback;
 }
@@ -93,7 +93,7 @@ export function getReadClient() {
 
 export function getWriteClient(account) {
   if (typeof window === 'undefined' || !window.ethereum) {
-    throw new Error('Cần MetaMask để ký giao dịch CredentialCheck.');
+    throw new Error('MetaMask is required to sign CredentialCheck transactions.');
   }
   return makeClient({
     account: resolveReadAccount(account).address,
@@ -103,7 +103,7 @@ export function getWriteClient(account) {
 
 export async function ensureStudioNetwork() {
   if (typeof window === 'undefined' || !window.ethereum) {
-    throw new Error('Cần MetaMask để ký giao dịch CredentialCheck.');
+    throw new Error('MetaMask is required to sign CredentialCheck transactions.');
   }
   const chainIdHex = `0x${studionet.id.toString(16)}`;
   const current = await window.ethereum.request({ method: 'eth_chainId' });
@@ -135,7 +135,7 @@ export async function ensureStudioNetwork() {
 }
 
 export async function readView(client, functionName, args = [], fromAddress) {
-  if (!client) throw new Error('Không tạo được kết nối đọc studionet');
+  if (!client) throw new Error('Could not open a studionet read connection');
   const res = await client.readContract({
     address: CONTRACT_ADDRESS,
     functionName,

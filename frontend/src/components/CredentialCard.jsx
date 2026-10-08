@@ -20,25 +20,25 @@ export function CredentialCard({ credential }) {
       {(credential.verdict || credential.reason || credential.confidence !== null) && (
         <dl className="verdict-grid">
           <div>
-            <dt>Phán quyết</dt>
+            <dt>Verdict</dt>
             <dd>{credential.verdict || '—'}</dd>
           </div>
           <div>
-            <dt>Độ tin cậy</dt>
+            <dt>Confidence</dt>
             <dd>{credential.confidence === null ? '—' : `${credential.confidence}/100`}</dd>
           </div>
           <div className="span-2">
-            <dt>Lý do</dt>
+            <dt>Reason</dt>
             <dd>{credential.reason || '—'}</dd>
           </div>
         </dl>
       )}
       <div className="link-columns">
-        <UrlGroup title="Hồ sơ" urls={credential.profileUrls} />
-        <UrlGroup title="Nguồn xác minh" urls={credential.verificationUrls} />
+        <UrlGroup title="Profile" urls={credential.profileUrls} />
+        <UrlGroup title="Verification sources" urls={credential.verificationUrls} />
       </div>
       {credential.submitter && (
-        <p className="submitter">Người nộp <code>{credential.submitter}</code></p>
+        <p className="submitter">Submitted by <code>{credential.submitter}</code></p>
       )}
     </article>
   );
@@ -49,7 +49,7 @@ function UrlGroup({ title, urls }) {
   return (
     <div>
       <h4>{title}</h4>
-      {list.length === 0 && <p className="empty-inline">Chưa có link.</p>}
+      {list.length === 0 && <p className="empty-inline">No links yet.</p>}
       <ul>
         {list.map((url) => (
           <li key={url}>

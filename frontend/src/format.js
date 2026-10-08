@@ -128,16 +128,16 @@ export function normalizeCredential(raw, fallbackId) {
 
 export function statusMeta(status) {
   if (status === 'VERIFIED') {
-    return { label: 'VERIFIED', tone: 'ok', hint: 'Nguồn độc lập xác nhận bằng cấp / chứng chỉ.' };
+    return { label: 'VERIFIED', tone: 'ok', hint: 'Independent sources confirm this credential.' };
   }
   if (status === 'UNVERIFIED') {
-    return { label: 'UNVERIFIED', tone: 'bad', hint: 'Không xác nhận được, hoặc nguồn độc lập mâu thuẫn với khai báo.' };
+    return { label: 'UNVERIFIED', tone: 'bad', hint: 'Independent sources do not confirm the claim, or they contradict it.' };
   }
   if (status === 'DISPUTED') {
-    return { label: 'DISPUTED', tone: 'warn', hint: 'Độ tin cậy dưới 60. Người nộp có thể bổ sung nguồn rồi xác minh lại.' };
+    return { label: 'DISPUTED', tone: 'warn', hint: 'Confidence is below 60. The submitter can add sources and verify again.' };
   }
   if (status === 'SUBMITTED') {
-    return { label: 'SUBMITTED', tone: 'pending', hint: 'Đã ghi nhận, chưa có phán quyết.' };
+    return { label: 'SUBMITTED', tone: 'pending', hint: 'Recorded on-chain. No verdict yet.' };
   }
   return { label: status || 'UNKNOWN', tone: 'pending', hint: '' };
 }

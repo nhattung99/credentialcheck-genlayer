@@ -42,7 +42,7 @@ export default function App() {
   const connectWallet = async () => {
     try {
       if (!window.ethereum) {
-        setConnectError('Cần cài MetaMask để ký giao dịch nộp credential.');
+        setConnectError('Install MetaMask to sign a credential submission.');
         return;
       }
       setConnectError('');
@@ -52,10 +52,10 @@ export default function App() {
         await ensureStudioNetwork();
       } catch (err) {
         console.warn('studionet switch note:', err);
-        setConnectError(formatWalletError(err, 'Chưa chuyển được sang studionet'));
+        setConnectError(formatWalletError(err, 'Could not switch to studionet'));
       }
     } catch (err) {
-      setConnectError(formatWalletError(err, 'Không kết nối được ví'));
+      setConnectError(formatWalletError(err, 'Could not connect the wallet'));
     }
   };
 
@@ -68,7 +68,7 @@ export default function App() {
     <div className="app">
       {!hasContractAddress && (
         <div className="missing-banner" role="status">
-          Chưa có địa chỉ contract. App vẫn mở được: bạn xem form và tra cứu, nhưng ghi / đọc on-chain tắt cho đến khi deploy trên <strong>studionet</strong> và gán <code>VITE_CONTRACT_ADDRESS</code>.
+          No contract address yet. The app still opens so you can read the form, but on-chain reads and writes stay off until the contract is deployed on <strong>studionet</strong> and <code>VITE_CONTRACT_ADDRESS</code> is set.
         </div>
       )}
 
@@ -77,15 +77,15 @@ export default function App() {
           <span className="seal" aria-hidden="true"><BadgeCheck size={22} /></span>
           <span>
             <strong>CredentialCheck</strong>
-            <small>Registry bằng cấp trên GenLayer</small>
+            <small>Public credential registry on GenLayer</small>
           </span>
         </a>
         <nav>
           <button type="button" className={route === 'lookup' ? 'nav on' : 'nav'} onClick={() => go('lookup')}>
-            Tra cứu
+            Look up
           </button>
           <button type="button" className={route === 'submit' ? 'nav on' : 'nav'} onClick={() => go('submit')}>
-            Nộp credential
+            Submit
           </button>
         </nav>
         <div className="wallet-slot">
@@ -96,18 +96,18 @@ export default function App() {
             </a>
           ) : (
             <button className="btn-ghost" type="button" onClick={connectWallet}>
-              <Wallet size={15} /> Kết nối ví
+              <Wallet size={15} /> Connect wallet
             </button>
           )}
         </div>
       </header>
 
       <section className="hero">
-        <p className="kicker">Education / HR · không escrow · không chuyển GEN</p>
-        <h1>Xác minh bằng cấp công khai, đủ rẻ cho tuyển dụng ngắn hạn.</h1>
+        <p className="kicker">Education / HR · no escrow · no GEN transfer</p>
+        <h1>Public credential checks, cheap enough for short-term hiring.</h1>
         <p>
-          Ứng viên nộp loại chứng chỉ, tổ chức cấp, và tối thiểu hai nguồn tra cứu độc lập.
-          Đồng thuận AI của GenLayer ghi <em>VERIFIED</em> hoặc <em>UNVERIFIED</em> để nhà tuyển dụng tự tra.
+          A candidate submits a certificate type, the issuer, and at least two independent lookup sources.
+          GenLayer AI consensus records <em>VERIFIED</em> or <em>UNVERIFIED</em> so a recruiter can check it directly.
         </p>
       </section>
 
@@ -121,7 +121,7 @@ export default function App() {
       {route === 'submit' ? <SubmitPanel account={account} /> : <LookupPanel />}
 
       <footer>
-        <p>Phán quyết nhị phân. Confidence dưới 60 giữ bản ghi ở DISPUTED cho đến khi người nộp bổ sung nguồn.</p>
+        <p>The verdict is binary. Confidence below 60 keeps the record DISPUTED until the submitter adds sources.</p>
       </footer>
     </div>
   );

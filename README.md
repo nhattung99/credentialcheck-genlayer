@@ -4,7 +4,7 @@ Public credential registry on GenLayer. A candidate (or a recruiter on their beh
 
 There is no escrow, no payout, and no GEN transfer. The contract only records a public verification.
 
-> CredentialCheck chết nếu không có GenLayer: không có smart contract EVM nào đọc hiểu được hồ sơ bằng cấp phi cấu trúc để đối chiếu với nguồn xác minh độc lập bằng ngôn ngữ tự nhiên, và không có dịch vụ kiểm tra lý lịch nào đủ rẻ cho tuyển dụng freelance/quy mô nhỏ — chỉ có đồng thuận AI phi tập trung của GenLayer mới xác minh được với chi phí gần bằng 0, công khai minh bạch cho bất kỳ ai tra cứu lại.
+> CredentialCheck dies without GenLayer: no EVM contract can read an unstructured credential and compare it with independent verification sources in natural language, and no background-check service is cheap enough for freelance or small-scale hiring. Only GenLayer's decentralized AI consensus can verify this at near-zero cost and leave a public record anyone can look up.
 
 ## Why this is an Intelligent Contract submission
 
@@ -12,14 +12,25 @@ Portal category: **Intelligent Contracts** (0–300 pts), not Projects.
 
 The product is one contract plus a thin public UI. It does not move value, split fees, or run a marketplace. GenLayer is in the loop because the decision itself is non-deterministic: unstructured profile pages have to be read and compared with official lookup pages, then a binary verdict has to be agreed by validators and stored on studionet.
 
+## Live App
+
+Production URL is recorded here after the Vercel deploy returns HTTP 200.
+
+## Deployed Contract
+
+- **Network:** studionet (GenLayer Studio)
+- **Address:** `0xE964856aAee2DBC1953bb6948993c7408188a6E0`
+- **Explorer:** https://genlayer-explorer.vercel.app/address/0xE964856aAee2DBC1953bb6948993c7408188a6E0
+
 ## Status
 
 | Item | Value |
 |---|---|
 | Network | studionet only |
-| Contract | Not deployed yet. Paste the Studio address here after `Result: SUCCESS`. |
-| `VITE_CONTRACT_ADDRESS` | Empty until that address exists |
-| Live app | Deploy to Vercel after the address is set |
+| Contract | `0xE964856aAee2DBC1953bb6948993c7408188a6E0` |
+| Explorer | https://genlayer-explorer.vercel.app/address/0xE964856aAee2DBC1953bb6948993c7408188a6E0 |
+| `VITE_CONTRACT_ADDRESS` | Set in `frontend/.env` and in the Vercel production environment |
+| Live app | Pending the production deploy check |
 
 Until the address is set, the frontend boots in preview mode: a banner explains that writes and on-chain reads are off, and the page does not crash.
 
@@ -121,7 +132,7 @@ After that address exists:
 
 1. Set `frontend/.env`:
    ```
-   VITE_CONTRACT_ADDRESS=0x...
+   VITE_CONTRACT_ADDRESS=0xE964856aAee2DBC1953bb6948993c7408188a6E0
    ```
    Use the same name in the Vercel project environment.
 2. `cd frontend && npm install && npm run build`
@@ -130,7 +141,7 @@ After that address exists:
 
 ## Frontend
 
-- **Tra cứu** is the default page. Wallet connection is optional. Search by credential id or submitter address.
-- **Nộp credential** uses category chips (degree, IT certificate, professional certificate, other). Each chip suggests a `claim_details` format and a short list of issuing organizations, with a free-text option. Every URL field has a clipboard paste button.
-- **Yêu cầu AI xác minh** submits, then calls `resolve_credential`, and shows a badge: green `VERIFIED`, red `UNVERIFIED`, amber `DISPUTED`, plus the reason and confidence.
+- **Look up** is the default page. Wallet connection is optional. Search by credential id or submitter address.
+- **Submit** uses category chips (university degree, IT certificate, professional certificate, other). Each chip suggests a `claim_details` format and a short list of issuing organizations, with a free-text option. Every URL field has a clipboard paste button.
+- **Request AI verification** submits, then calls `resolve_credential`, and shows a badge: green `VERIFIED`, red `UNVERIFIED`, amber `DISPUTED`, plus the reason and confidence.
 - If the address is missing, the banner stays up and contract calls are not made.

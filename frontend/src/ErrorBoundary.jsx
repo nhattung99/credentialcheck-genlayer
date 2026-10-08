@@ -21,11 +21,11 @@ export class ErrorBoundary extends React.Component {
         <div className="crash-screen">
           <div className="crash-card">
             <AlertTriangle size={28} />
-            <h2>Giao diện gặp lỗi</h2>
-            <p>Trang không bị trắng. Tải lại để tiếp tục tra cứu hoặc nộp credential.</p>
+            <h2>Something went wrong</h2>
+            <p>The page stayed up. Reload to keep looking up or submitting a credential.</p>
             {this.state.error && <pre>{String(this.state.error)}</pre>}
             <button className="btn-primary" type="button" onClick={() => window.location.reload()}>
-              <RefreshCw size={16} /> Tải lại
+              <RefreshCw size={16} /> Reload
             </button>
           </div>
         </div>
