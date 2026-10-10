@@ -116,6 +116,7 @@ export function normalizeCredential(raw, fallbackId) {
     submitter: String(row.submitter || ''),
     credentialType: String(row.credential_type || ''),
     institution: String(row.issuing_institution || ''),
+    holderName: String(row.holder_name || ''),
     details: String(row.claim_details || ''),
     profileUrls: Array.isArray(row.profile_reference_urls) ? row.profile_reference_urls.map(String) : [],
     verificationUrls: Array.isArray(row.verification_source_urls) ? row.verification_source_urls.map(String) : [],
@@ -128,13 +129,13 @@ export function normalizeCredential(raw, fallbackId) {
 
 export function statusMeta(status) {
   if (status === 'VERIFIED') {
-    return { label: 'VERIFIED', tone: 'ok', hint: 'Independent sources confirm this credential.' };
+    return { label: 'VERIFIED', tone: 'ok', hint: 'Pinned official sources confirm this holder and this credential.' };
   }
   if (status === 'UNVERIFIED') {
-    return { label: 'UNVERIFIED', tone: 'bad', hint: 'Independent sources do not confirm the claim, or they contradict it.' };
+    return { label: 'UNVERIFIED', tone: 'bad', hint: 'Pinned official sources do not confirm the claim. A profile page cannot override that.' };
   }
   if (status === 'DISPUTED') {
-    return { label: 'DISPUTED', tone: 'warn', hint: 'Confidence is below 60. The submitter can add sources and verify again.' };
+    return { label: 'DISPUTED', tone: 'warn', hint: 'Confidence is below 60. The submitter can add profile context and verify again. Official sources stay pinned.' };
   }
   if (status === 'SUBMITTED') {
     return { label: 'SUBMITTED', tone: 'pending', hint: 'Recorded on-chain. No verdict yet.' };

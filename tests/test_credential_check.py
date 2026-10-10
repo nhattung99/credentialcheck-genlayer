@@ -5,10 +5,10 @@ import pytest
 CONTRACT_PATH = "contracts/credential_check.py"
 
 PROFILE = "https://example.com/in/jane-doe"
-VERIFY_A = "https://example.org/registry/diploma/jane-doe"
-VERIFY_B = "https://example.net/cert/aws/ABC123"
-EXTRA_PROFILE = "https://example.com/portfolio/jane-doe"
-EXTRA_SOURCE = "https://example.org/registry/diploma/jane-doe-2020"
+EXTRA_PROFILE = "https://example.org/portfolio/jane-doe"
+HOLDER = "Jane Doe"
+OFFICIAL_TEXT = "Official record: Jane Doe, Bachelor's Degree, MIT, Computer Science, graduated 2020. Record active."
+PROFILE_TEXT = "Self-published profile of Jane Doe. This page is not an issuer registry."
 
 
 def _active_vm(direct_vm):
@@ -88,14 +88,14 @@ def _count(contract):
     return int(contract.get_credential_count())
 
 
-def _good_web():
-    return {
-        PROFILE: "Jane Doe — Bachelor of Science in Computer Science, Massachusetts Institute of Technology, class of 2020.",
-        VERIFY_A: "Official diploma registry: Jane Doe, BSc Computer Science, MIT, conferred 2020. Record active.",
-        VERIFY_B: "Amazon Web Services certification verify: Jane Doe, Solutions Architect Associate, credential ABC123, valid.",
-        EXTRA_PROFILE: "Portfolio of Jane Doe, MIT Computer Science 2020, public projects and LinkedIn-equivalent bio.",
-        EXTRA_SOURCE: "Second official lookup: Jane Doe degree record MIT Computer Science graduated 2020 confirmed.",
-    }
+def _good_web(contract, credential_id):
+    row = _cred(contract, credential_id)
+    web = {}
+    for url in row["verification_source_urls"]:
+        web[url] = OFFICIAL_TEXT
+    for url in row["profile_reference_urls"]:
+        web[url] = PROFILE_TEXT
+    return web
 
 
 def _submit(contract, vm, account, **overrides):
@@ -103,24 +103,24 @@ def _submit(contract, vm, account, **overrides):
     payload = {
         "credential_type": "Bachelor's Degree",
         "issuing_institution": "MIT",
+        "holder_name": HOLDER,
         "claim_details": "Computer Science, graduated 2020",
         "profile_reference_urls": [PROFILE],
-        "verification_source_urls": [VERIFY_A, VERIFY_B],
     }
     payload.update(overrides)
     return contract.submit_credential(
         payload["credential_type"],
         payload["issuing_institution"],
+        payload["holder_name"],
         payload["claim_details"],
         payload["profile_reference_urls"],
-        payload["verification_source_urls"],
     )
 
 
-def _resolve(contract, vm, credential_id, verdict, confidence=90, reason="Independent sources match the claim", web=None):
+def _resolve(contract, vm, credential_id, verdict, confidence=90, reason="Pinned official pages name the holder", web=None):
     sim_installMocks(
         vm,
-        web=web or _good_web(),
+        web=web if web is not None else _good_web(contract, credential_id),
         llm={"verdict": verdict, "confidence": confidence, "reason": reason},
     )
     contract.resolve_credential(credential_id)
@@ -147,8 +147,11 @@ def test_happy_path_verified(direct_vm, direct_deploy, direct_accounts):
     assert int(row["confidence"]) == 92
     assert "Registry" in row["verdict_reason"]
     assert PROFILE in row["profile_reference_urls"]
-    assert VERIFY_A in row["verification_source_urls"]
-    assert VERIFY_B in row["verification_source_urls"]
+    assert row["holder_name"] == HOLDER
+    pinned = _as_list(contract.get_official_sources("MIT"))
+    assert row["verification_source_urls"] == pinned
+    assert "example.com" not in " ".join(row["verification_source_urls"])
+    assert len(pinned) >= 2
 
 
 def test_happy_path_unverified(direct_vm, direct_deploy, direct_accounts):
@@ -165,7 +168,7 @@ def test_happy_path_unverified(direct_vm, direct_deploy, direct_accounts):
     assert int(row["confidence"]) == 88
 
 
-def test_missing_profile_and_verification_urls_blocked(direct_vm, direct_deploy, direct_accounts):
+def test_caller_cannot_choose_verification_sources(direct_vm, direct_deploy, direct_accounts):
     submitter = direct_accounts[1]
     contract = direct_deploy(CONTRACT_PATH)
     vm = _active_vm(direct_vm)
@@ -173,17 +176,19 @@ def test_missing_profile_and_verification_urls_blocked(direct_vm, direct_deploy,
     with pytest.raises(Exception):
         _submit(contract, vm, submitter, profile_reference_urls=[])
     with pytest.raises(Exception):
-        _submit(contract, vm, submitter, verification_source_urls=[VERIFY_A])
-    with pytest.raises(Exception):
-        _submit(contract, vm, submitter, verification_source_urls=[])
-    with pytest.raises(Exception):
         _submit(contract, vm, submitter, profile_reference_urls=["ftp://files.example/cv"])
+    with pytest.raises(Exception):
+        _submit(contract, vm, submitter, profile_reference_urls=["https://www.mit.edu/people/jane"])
     with pytest.raises(Exception):
         _submit(contract, vm, submitter, credential_type="   ")
     with pytest.raises(Exception):
         _submit(contract, vm, submitter, issuing_institution="")
     with pytest.raises(Exception):
+        _submit(contract, vm, submitter, holder_name="  ")
+    with pytest.raises(Exception):
         _submit(contract, vm, submitter, claim_details="  ")
+    with pytest.raises(Exception):
+        _submit(contract, vm, submitter, issuing_institution="Example College")
 
     assert _count(contract) == 0
 
@@ -204,21 +209,22 @@ def test_low_confidence_disputed_then_add_evidence_and_resolve(direct_vm, direct
 
     vm.sender = stranger
     with pytest.raises(Exception):
-        contract.add_evidence(credential_id, [EXTRA_PROFILE], [EXTRA_SOURCE])
+        contract.add_evidence(credential_id, [EXTRA_PROFILE])
     assert _cred(contract, credential_id)["status"] == "DISPUTED"
     assert EXTRA_PROFILE not in _cred(contract, credential_id)["profile_reference_urls"]
 
+    pinned = list(_cred(contract, credential_id)["verification_source_urls"])
     vm.sender = submitter
     with pytest.raises(Exception):
-        contract.add_evidence(credential_id, [], [])
+        contract.add_evidence(credential_id, [])
 
-    contract.add_evidence(credential_id, [EXTRA_PROFILE], [EXTRA_SOURCE])
+    contract.add_evidence(credential_id, [EXTRA_PROFILE])
     row = _cred(contract, credential_id)
     assert row["status"] == "SUBMITTED"
     assert row["verdict"] == ""
     assert int(row["confidence"]) == 0
     assert EXTRA_PROFILE in row["profile_reference_urls"]
-    assert EXTRA_SOURCE in row["verification_source_urls"]
+    assert row["verification_source_urls"] == pinned
 
     _resolve(contract, vm, credential_id, "VERIFIED", 91, "Added registry page confirms the degree")
     row = _cred(contract, credential_id)
@@ -234,13 +240,12 @@ def test_web_fail_and_bad_json_revert_clean(direct_vm, direct_deploy, direct_acc
 
     credential_id = _submit(contract, vm, submitter)
     vm.sender = submitter
+    web = _good_web(contract, credential_id)
+    first_official = _cred(contract, credential_id)["verification_source_urls"][0]
+    web[first_official] = ""
     sim_installMocks(
         vm,
-        web={
-            PROFILE: "",
-            VERIFY_A: _good_web()[VERIFY_A],
-            VERIFY_B: _good_web()[VERIFY_B],
-        },
+        web=web,
         llm={"verdict": "VERIFIED", "confidence": 90, "reason": "should not be stored"},
     )
     with pytest.raises(Exception) as web_err:
@@ -252,7 +257,7 @@ def test_web_fail_and_bad_json_revert_clean(direct_vm, direct_deploy, direct_acc
     assert int(row["confidence"]) == 0
     assert row["verdict_reason"] == ""
 
-    sim_installMocks(vm, web=_good_web(), llm="this is not json at all")
+    sim_installMocks(vm, web=_good_web(contract, credential_id), llm="this is not json at all")
     with pytest.raises(Exception) as json_err:
         contract.resolve_credential(credential_id)
     assert "json" in str(json_err.value).lower() or "parse" in str(json_err.value).lower()
@@ -281,7 +286,7 @@ def test_double_resolve_blocked(direct_vm, direct_deploy, direct_accounts):
     assert int(row["confidence"]) == 80
 
     with pytest.raises(Exception):
-        contract.add_evidence(credential_id, [EXTRA_PROFILE], [])
+        contract.add_evidence(credential_id, [EXTRA_PROFILE])
     assert EXTRA_PROFILE not in _cred(contract, credential_id)["profile_reference_urls"]
 
 
@@ -294,7 +299,7 @@ def test_add_evidence_stranger_and_unknown_credential(direct_vm, direct_deploy, 
     credential_id = _submit(contract, vm, submitter)
     vm.sender = submitter
     with pytest.raises(Exception):
-        contract.add_evidence(credential_id, [EXTRA_PROFILE], [])
+        contract.add_evidence(credential_id, [EXTRA_PROFILE])
     assert _cred(contract, credential_id)["status"] == "SUBMITTED"
 
     vm.sender = stranger
@@ -303,7 +308,7 @@ def test_add_evidence_stranger_and_unknown_credential(direct_vm, direct_deploy, 
     with pytest.raises(Exception):
         contract.get_credential("999")
     with pytest.raises(Exception):
-        contract.add_evidence("999", [EXTRA_PROFILE], [EXTRA_SOURCE])
+        contract.add_evidence("999", [EXTRA_PROFILE])
 
 
 def test_get_credentials_by_submitter_lists_many(direct_vm, direct_deploy, direct_accounts):
@@ -325,9 +330,9 @@ def test_get_credentials_by_submitter_lists_many(direct_vm, direct_deploy, direc
         contract,
         vm,
         bob,
-        credential_type="PMP",
-        issuing_institution="Project Management Institute",
-        claim_details="PMP, issued 2022, ID PMP-7781",
+        credential_type="Bachelor's Degree",
+        issuing_institution="Harvard University",
+        claim_details="Economics, graduated 2019",
     )
 
     alice_ids = _as_list(contract.get_credentials_by_submitter(_addr(alice)))
@@ -342,4 +347,65 @@ def test_get_credentials_by_submitter_lists_many(direct_vm, direct_deploy, direc
     alice_row = _cred(contract, second)
     assert alice_row["credential_type"] == "AWS Certified Solutions Architect"
     assert alice_row["issuing_institution"] == "Amazon Web Services"
+    assert alice_row["verification_source_urls"] == _as_list(contract.get_official_sources("Amazon Web Services"))
     assert _norm(alice_row["submitter"]) == _norm(_addr(alice))
+
+
+def test_profile_cannot_override_pinned_sources(direct_vm, direct_deploy, direct_accounts):
+    submitter = direct_accounts[1]
+    contract = direct_deploy(CONTRACT_PATH)
+    vm = _active_vm(direct_vm)
+
+    credential_id = _submit(contract, vm, submitter)
+    row = _cred(contract, credential_id)
+    web = {}
+    for url in row["verification_source_urls"]:
+        web[url] = "Example Domain. This page is for illustrative examples and does not list graduates."
+    for url in row["profile_reference_urls"]:
+        web[url] = "Jane Doe confirms her own MIT Bachelor's Degree in Computer Science, graduated 2020."
+    vm.sender = submitter
+    sim_installMocks(
+        vm,
+        web=web,
+        llm={"verdict": "VERIFIED", "confidence": 99, "reason": "The profile says the degree is real"},
+    )
+    contract.resolve_credential(credential_id)
+    settled = _cred(contract, credential_id)
+    assert settled["status"] == "UNVERIFIED"
+    assert settled["verdict"] == "UNVERIFIED"
+    assert int(settled["confidence"]) == 90
+    assert "holder" in settled["verdict_reason"].lower()
+
+
+def test_only_owner_can_pin_official_sources(direct_vm, direct_deploy, direct_accounts):
+    contract = direct_deploy(CONTRACT_PATH)
+    vm = _active_vm(direct_vm)
+    owner = getattr(vm, "_sender", None)
+    stranger = direct_accounts[1]
+    assert _norm(owner) == _norm(contract.get_owner())
+    assert _norm(stranger) != _norm(owner)
+
+    vm.sender = stranger
+    with pytest.raises(Exception):
+        contract.register_institution("Example Registry", [
+            "https://www.mit.edu/",
+            "https://www.studentclearinghouse.org/",
+        ])
+    vm.sender = owner
+    with pytest.raises(Exception):
+        contract.register_institution("Example Registry", [
+            "https://example.com/verify",
+            "https://www.studentclearinghouse.org/",
+        ])
+    with pytest.raises(Exception):
+        contract.register_institution("Example Registry", [
+            "https://registrar.mit.edu/records",
+            "https://www.mit.edu/",
+        ])
+    contract.register_institution("Example Registry", [
+        "https://www.harvard.edu/",
+        "https://www.studentclearinghouse.org/",
+    ])
+    pinned = _as_list(contract.get_official_sources("example registry"))
+    assert "https://www.harvard.edu/" in pinned
+    assert "https://www.studentclearinghouse.org/" in pinned

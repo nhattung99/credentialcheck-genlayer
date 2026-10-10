@@ -106,8 +106,8 @@ export default function App() {
         <p className="kicker">Education / HR · no escrow · no GEN transfer</p>
         <h1>Public credential checks, cheap enough for short-term hiring.</h1>
         <p>
-          A candidate submits a certificate type, the issuer, and at least two independent lookup sources.
-          GenLayer AI consensus records <em>VERIFIED</em> or <em>UNVERIFIED</em> so a recruiter can check it directly.
+          The registry owner pins the official pages. A candidate submits the holder name, the claim, and a profile.
+          Those pinned pages are the only basis for <em>VERIFIED</em>. A profile cannot authenticate the claim.
         </p>
       </section>
 
@@ -121,7 +121,7 @@ export default function App() {
       {route === 'submit' ? <SubmitPanel account={account} /> : <LookupPanel />}
 
       <footer>
-        <p>The verdict is binary. Confidence below 60 keeps the record DISPUTED until the submitter adds sources.</p>
+        <p>The verdict is binary. Confidence below 60 keeps the record DISPUTED. Extra evidence can only add profile context. Official sources stay pinned.</p>
       </footer>
     </div>
   );

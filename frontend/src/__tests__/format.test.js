@@ -26,6 +26,7 @@ assert.equal(normalizeCredential({
   submitter: '0xabc',
   credential_type: 'PMP',
   issuing_institution: 'PMI',
+  holder_name: 'Jane Doe',
   claim_details: 'issued 2022',
   profile_reference_urls: ['https://example.com/me'],
   verification_source_urls: ['https://example.org/a', 'https://example.net/b'],
@@ -33,7 +34,8 @@ assert.equal(normalizeCredential({
   verdict: 'VERIFIED',
   verdict_reason: 'matched',
   confidence: 90,
-}, '3').id, '3');
+}, '3').holderName, 'Jane Doe');
+assert.equal(normalizeCredential({ holder_name: 'Jane Doe' }, '3').id, '3');
 assert.equal(statusMeta('DISPUTED').tone, 'warn');
 assert.equal(statusMeta('UNVERIFIED').tone, 'bad');
 

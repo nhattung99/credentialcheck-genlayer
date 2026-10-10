@@ -1,10 +1,10 @@
 # CredentialCheck
 
-Public credential registry on GenLayer. A candidate (or a recruiter on their behalf) submits a degree or certificate plus at least two independent verification sources. The Intelligent Contract fetches those pages and returns one binary verdict: `VERIFIED` or `UNVERIFIED`. Anyone can look the result up later by `credential_id` or by the submitter wallet. No login is required to read.
+Public credential registry on GenLayer. The contract owner pins at least two official https pages, on distinct registrable domains, for each institution. A candidate submits the holder name, the claim, and a profile URL. The Intelligent Contract copies the pinned pages onto the credential. The submitter cannot choose them. The model may read the profile as untrusted context, but `VERIFIED` is stored only when the pinned pages name the holder and the validators agree. Anyone can look the result up later by `credential_id` or by the submitter wallet. No login is required to read.
 
 There is no escrow, no payout, and no GEN transfer. The contract only records a public verification.
 
-> CredentialCheck dies without GenLayer: no EVM contract can read an unstructured credential and compare it with independent verification sources in natural language, and no background-check service is cheap enough for freelance or small-scale hiring. Only GenLayer's decentralized AI consensus can verify this at near-zero cost and leave a public record anyone can look up.
+> CredentialCheck dies without GenLayer: no EVM contract can read pinned issuer pages and an unstructured profile, then agree on a binary credential verdict in natural language. No background-check service is cheap enough for freelance or small-scale hiring. Only GenLayer's decentralized AI consensus can do this at near-zero cost and leave a public record anyone can look up.
 
 ## Why this is an Intelligent Contract submission
 
@@ -19,34 +19,48 @@ https://credentialcheck-genlayer.vercel.app
 ## Deployed Contract
 
 - **Network:** studionet (GenLayer Studio)
-- **Address:** `0xE964856aAee2DBC1953bb6948993c7408188a6E0`
-- **Explorer:** https://genlayer-explorer.vercel.app/address/0xE964856aAee2DBC1953bb6948993c7408188a6E0
+- **Address:** `0x0ba3f6361E08B96c383E396E37a80d884fA869c1`
+- **Explorer:** https://explorer-studio.genlayer.com/address/0x0ba3f6361E08B96c383E396E37a80d884fA869c1
 
 ## Status
 
 | Item | Value |
 |---|---|
 | Network | studionet only |
-| Contract | `0xE964856aAee2DBC1953bb6948993c7408188a6E0` |
-| Explorer | https://genlayer-explorer.vercel.app/address/0xE964856aAee2DBC1953bb6948993c7408188a6E0 |
+| Contract | `0x0ba3f6361E08B96c383E396E37a80d884fA869c1` |
+| Explorer | https://explorer-studio.genlayer.com/address/0x0ba3f6361E08B96c383E396E37a80d884fA869c1 |
 | `VITE_CONTRACT_ADDRESS` | Set in `frontend/.env` and in the Vercel production environment |
 | Live app | https://credentialcheck-genlayer.vercel.app |
 
 Until the address is set, the frontend boots in preview mode: a banner explains that writes and on-chain reads are off, and the page does not crash.
 
+## Authenticity
+
+The submitter does not choose the evidence that can produce `VERIFIED`.
+
+- At deploy, the owner pins MIT, Harvard University, Amazon Web Services, and Google Cloud. Each pin is at least two `https` URLs on distinct registrable domains. Hosts a claimant can publish on (`example.com`, GitHub Pages, Vercel, LinkedIn, Notion, and similar) cannot be official sources.
+- `register_institution` is owner-only. A later pin does not rewrite credentials already stored.
+- `submit_credential` snapshots the pinned URLs. An institution with no pin is rejected. A profile URL on an official source's registrable domain is rejected.
+- `add_evidence` can append profile URLs only, and only while `DISPUTED`.
+- After the model answers, a deterministic check runs inside the same nondet block: if the verdict is `VERIFIED` but the pinned page text does not contain the holder name, the contract stores `UNVERIFIED` at confidence 90. A profile that names the person cannot override that.
+
 ## Architecture
 
 ```
+register_institution (owner only)
+  → pin >= 2 https URLs on distinct registrable domains
 submit_credential
+  → copy those pinned URLs onto the credential
   → status SUBMITTED
 resolve_credential
-  → gl.nondet.web.render each profile URL and each verification URL
+  → gl.nondet.web.render each profile URL and each pinned official URL
   → gl.nondet.exec_prompt returns JSON {verdict, confidence, reason}
+  → if VERIFIED but the pinned pages do not name the holder, force UNVERIFIED at confidence 90
   → validators must agree on the verdict AND on whether confidence clears 60
   → confidence < 60: DISPUTED
   → else status = VERIFIED or UNVERIFIED
 add_evidence (submitter only, DISPUTED only)
-  → append URLs, status back to SUBMITTED
+  → append profile URLs only, status back to SUBMITTED
   → resolve_credential again
 ```
 
@@ -74,21 +88,25 @@ No payable methods and no `gl.message.value`. This contract never transfers GEN.
 
 Writes:
 
-- `submit_credential(credential_type, issuing_institution, claim_details, profile_reference_urls, verification_source_urls) -> credential_id`
-- `add_evidence(credential_id, additional_profile_urls, additional_verification_urls)`
+- `register_institution(institution, official_urls)` — owner only
+- `submit_credential(credential_type, issuing_institution, holder_name, claim_details, profile_reference_urls) -> credential_id`
+- `add_evidence(credential_id, additional_profile_urls)`
 - `resolve_credential(credential_id)`
 
 Views:
 
 - `get_credential(credential_id)`
 - `get_credentials_by_submitter(submitter)`
+- `get_official_sources(institution)`
+- `get_owner()`
 - `get_credential_count()`
 
 Rules:
 
-- Credential type, issuing institution, and claim details are required.
-- At least 1 `http(s)` profile URL and 2 `http(s)` verification URLs.
-- `confidence < 60` stores `DISPUTED`. Only the submitter can add evidence, and only while disputed.
+- Credential type, issuing institution, holder name, and claim details are required.
+- At least 1 `http(s)` profile URL. Verification URLs come from the owner pin, not from the caller.
+- Official URLs must be `https`, at least two, on distinct registrable domains, and not on a caller-controlled host.
+- `confidence < 60` stores `DISPUTED`. Only the submitter can add profile evidence, and only while disputed.
 - A second `resolve_credential` is rejected unless status is `SUBMITTED` again.
 
 ## Tests
@@ -98,14 +116,16 @@ pip install -r requirements.txt
 gltest tests/test_credential_check.py
 ```
 
-Latest local run: **8 passed** (`gltest tests/test_credential_check.py`).
+Latest local run: **10 passed** (`gltest tests/test_credential_check.py`).
 
 Covered:
 
-- Happy path `VERIFIED`
+- Happy path `VERIFIED` using pinned official pages that name the holder
 - Happy path `UNVERIFIED`
-- Missing profile URL, fewer than 2 verification URLs, empty fields
-- Low confidence → `DISPUTED` → stranger blocked → submitter `add_evidence` → resolve succeeds
+- Empty profile, profile on an official domain, empty holder, and an institution with no pin
+- Owner-only `register_institution`; caller-controlled hosts and same registrable domain are rejected
+- A profile that names the holder cannot force `VERIFIED` when the pinned pages do not
+- Low confidence → `DISPUTED` → stranger blocked → submitter `add_evidence` does not change official URLs → resolve succeeds
 - Empty page and broken JSON raise `UserError` and leave `SUBMITTED`
 - Double resolve blocked
 - `add_evidence` blocked for a non-submitter and for a non-disputed record
@@ -132,7 +152,7 @@ After that address exists:
 
 1. Set `frontend/.env`:
    ```
-   VITE_CONTRACT_ADDRESS=0xE964856aAee2DBC1953bb6948993c7408188a6E0
+   VITE_CONTRACT_ADDRESS=0x0ba3f6361E08B96c383E396E37a80d884fA869c1
    ```
    Use the same name in the Vercel project environment.
 2. `cd frontend && npm install && npm run build`
@@ -142,6 +162,6 @@ After that address exists:
 ## Frontend
 
 - **Look up** is the default page. Wallet connection is optional. Search by credential id or submitter address.
-- **Submit** uses category chips (university degree, IT certificate, professional certificate, other). Each chip suggests a `claim_details` format and a short list of issuing organizations, with a free-text option. Every URL field has a clipboard paste button.
+- **Submit** uses category chips (university degree, IT certificate, professional certificate, other). The holder name is required. Official sources are shown read-only from `get_official_sources`. A profile URL is context, not proof. Every URL field has a clipboard paste button.
 - **Request AI verification** submits, then calls `resolve_credential`, and shows a badge: green `VERIFIED`, red `UNVERIFIED`, amber `DISPUTED`, plus the reason and confidence.
 - If the address is missing, the banner stays up and contract calls are not made.

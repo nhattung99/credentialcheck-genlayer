@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Loader2, ShieldCheck } from 'lucide-react';
 import { CATEGORIES, CUSTOM_INSTITUTION } from '../presets.js';
 import { CredentialCard } from './CredentialCard.jsx';
@@ -13,6 +13,7 @@ import {
   hasContractAddress,
   pollCredential,
   readCredentialCount,
+  readOfficialSources,
   receiptLooksFailed,
   txExplorerUrl,
   waitForTx,
@@ -24,11 +25,12 @@ export function SubmitPanel({ account }) {
   const [credentialType, setCredentialType] = useState(CATEGORIES[0].credentialType);
   const [institutionChoice, setInstitutionChoice] = useState(CATEGORIES[0].institutions[0]);
   const [customInstitution, setCustomInstitution] = useState('');
+  const [holderName, setHolderName] = useState('');
   const [details, setDetails] = useState('');
   const [profileUrls, setProfileUrls] = useState(['']);
-  const [sourceUrls, setSourceUrls] = useState(['', '']);
+  const [pinnedSources, setPinnedSources] = useState([]);
+  const [pinnedState, setPinnedState] = useState('idle');
   const [extraProfiles, setExtraProfiles] = useState(['']);
-  const [extraSources, setExtraSources] = useState(['']);
   const [stage, setStage] = useState('');
   const [error, setError] = useState('');
   const [txHash, setTxHash] = useState('');
@@ -40,11 +42,37 @@ export function SubmitPanel({ account }) {
 
   const stageLabel = useMemo(() => {
     if (stage === 'record') return 'Writing the credential to studionet…';
-    if (stage === 'resolve') return 'AI is reading the profile and comparing verification sources…';
-    if (stage === 'evidence') return 'Adding evidence…';
+    if (stage === 'resolve') return 'AI is reading the pinned official pages. The profile is context only…';
+    if (stage === 'evidence') return 'Adding profile context…';
     if (stage === 'refresh') return 'Reading the result again…';
     return '';
   }, [stage]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const org = institution.trim();
+    if (!hasContractAddress || !org) {
+      setPinnedSources([]);
+      setPinnedState(org ? 'idle' : 'idle');
+      return undefined;
+    }
+    setPinnedState('loading');
+    const reader = getReadClient();
+    readOfficialSources(reader, org)
+      .then((urls) => {
+        if (cancelled) return;
+        setPinnedSources(urls);
+        setPinnedState('ready');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPinnedSources([]);
+        setPinnedState('error');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [institution]);
 
   const selectCategory = (next) => {
     setCategoryId(next.id);
@@ -105,18 +133,25 @@ export function SubmitPanel({ account }) {
     try {
       const type = credentialType.trim();
       const org = institution.trim();
+      const holder = holderName.trim();
       const claim = details.trim();
       if (!type) throw new Error('Choose or enter a credential type.');
       if (!org) throw new Error('Enter the issuing institution.');
+      if (!holder) throw new Error('Enter the holder name printed on the credential.');
       if (!claim) throw new Error('Enter the claim details.');
       const profiles = validateUrls(profileUrls, 1, 'Profile');
-      const sources = validateUrls(sourceUrls, 2, 'Verification sources');
       requireReady();
+      if (pinnedState === 'loading') {
+        throw new Error('Still reading the pinned official sources.');
+      }
+      if (pinnedSources.length < 2) {
+        throw new Error('No official verification sources are registered for this institution. The submitter cannot supply them.');
+      }
 
       setStage('record');
       const reader = getReadClient();
       const before = reader ? await readCredentialCount(reader, account) : 0;
-      const { client } = await write('submit_credential', [type, org, claim, profiles, sources]);
+      const { client } = await write('submit_credential', [type, org, holder, claim, profiles]);
 
       setStage('refresh');
       let created = null;
@@ -154,22 +189,15 @@ export function SubmitPanel({ account }) {
       if (!sameAddress(account, record.submitter)) {
         throw new Error('Only the wallet that submitted this credential can add evidence.');
       }
-      const profiles = cleanUrls(extraProfiles).filter(isHttpUrl);
-      const sources = cleanUrls(extraSources).filter(isHttpUrl);
-      const invalid = [...cleanUrls(extraProfiles), ...cleanUrls(extraSources)].find((url) => !isHttpUrl(url));
-      if (invalid) throw new Error(`Invalid link: ${invalid}`);
-      if (profiles.length + sources.length < 1) {
-        throw new Error('Add at least one profile or verification link.');
-      }
+      const profiles = validateUrls(extraProfiles, 1, 'Profile');
       setStage('evidence');
-      await write('add_evidence', [record.id, profiles, sources]);
+      await write('add_evidence', [record.id, profiles]);
       setStage('resolve');
       await write('resolve_credential', [record.id], { ai: true });
       setStage('refresh');
       const settled = await refreshRecord(record.id);
       setRecord(settled || record);
       setExtraProfiles(['']);
-      setExtraSources(['']);
     } catch (err) {
       setError(formatWalletError(err, 'Could not add evidence'));
     } finally {
@@ -183,10 +211,10 @@ export function SubmitPanel({ account }) {
     <section className="panel">
       <div className="panel-copy">
         <p className="eyebrow">Submit a credential</p>
-        <h2>State the claim, attach at least two independent sources, and let the AI decide</h2>
+        <h2>Name the holder. The registry already pinned the official pages.</h2>
         <p>
-          No GEN is locked and there is no background-check fee. The wallet only signs
-          {' '}<code>submit_credential</code> and <code>resolve_credential</code> on studionet.
+          A profile link is self-asserted context. It cannot make a claim VERIFIED.
+          No GEN is locked. The wallet only signs <code>submit_credential</code> and <code>resolve_credential</code> on studionet.
         </p>
       </div>
 
@@ -237,6 +265,15 @@ export function SubmitPanel({ account }) {
         )}
 
         <label className="field">
+          <span>Holder name</span>
+          <input
+            value={holderName}
+            onChange={(event) => setHolderName(event.target.value)}
+            placeholder="Jane Doe"
+          />
+        </label>
+
+        <label className="field">
           <span>Claim details</span>
           <textarea
             value={details}
@@ -246,19 +283,31 @@ export function SubmitPanel({ account }) {
           />
         </label>
 
+        <div className="field">
+          <span>Pinned official sources</span>
+          <p className="field-hint">Chosen by the registry owner. This form cannot change them.</p>
+          {pinnedState === 'loading' && <p className="field-hint">Reading the registry…</p>}
+          {pinnedState === 'error' && (
+            <p className="notice warn">Could not read official sources for this institution.</p>
+          )}
+          {pinnedState !== 'loading' && pinnedSources.length >= 2 && (
+            <ul>
+              {pinnedSources.map((url) => (
+                <li key={url}><a href={url} target="_blank" rel="noreferrer">{url}</a></li>
+              ))}
+            </ul>
+          )}
+          {pinnedState === 'ready' && pinnedSources.length < 2 && (
+            <p className="notice warn">No official verification sources are registered for this institution. The submitter cannot supply them.</p>
+          )}
+        </div>
+
         <UrlFields
           label="Personal profile"
-          hint="At least 1 public LinkedIn, portfolio, or profile link."
+          hint="At least 1 public profile or portfolio link. This page is not treated as proof."
           values={profileUrls}
           onChange={setProfileUrls}
           minCount={1}
-        />
-        <UrlFields
-          label="Independent verification sources"
-          hint="At least 2 links: an official diploma lookup, AWS Certification Verify, PSI/Pearson VUE, or another official page."
-          values={sourceUrls}
-          onChange={setSourceUrls}
-          minCount={2}
         />
 
         {error && <p className="notice warn" role="alert">{error}</p>}
@@ -286,20 +335,13 @@ export function SubmitPanel({ account }) {
           {record.status === 'DISPUTED' && (
             <form className="form-card" onSubmit={onAddEvidence}>
               <h3>Add evidence</h3>
-              <p className="field-hint">Only the submitter wallet can call this while the status is DISPUTED. The AI then verifies again.</p>
+              <p className="field-hint">Only the submitter wallet can call this while the status is DISPUTED. Extra links are profile context. Official sources stay pinned.</p>
               <UrlFields
                 label="Add profile links"
-                hint="Leave this empty if you are only adding verification sources."
+                hint="At least one http(s) profile URL."
                 values={extraProfiles}
                 onChange={setExtraProfiles}
-                minCount={0}
-              />
-              <UrlFields
-                label="Add verification sources"
-                hint="A new official lookup page."
-                values={extraSources}
-                onChange={setExtraSources}
-                minCount={0}
+                minCount={1}
               />
               <button className="btn-primary" type="submit" disabled={busy}>
                 {busy ? <Loader2 size={16} className="spin" /> : <ShieldCheck size={16} />}

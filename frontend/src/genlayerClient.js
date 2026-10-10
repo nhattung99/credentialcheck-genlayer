@@ -156,6 +156,11 @@ export async function readCredentialIds(client, submitter) {
   return normalizeIdList(raw);
 }
 
+export async function readOfficialSources(client, institution) {
+  const raw = await readView(client, 'get_official_sources', [String(institution || '')]);
+  return normalizeIdList(raw).filter((url) => /^https?:\/\//i.test(url));
+}
+
 export async function readCredentialCount(client, fromAddress) {
   const raw = unwrapViewResult(await readView(client, 'get_credential_count', [], fromAddress));
   if (typeof raw === 'number' && Number.isFinite(raw)) return raw;

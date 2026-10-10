@@ -12,6 +12,7 @@ export function CredentialCard({ credential }) {
           <p className="eyebrow">Credential #{credential.id || '—'}</p>
           <h3>{credential.credentialType || 'Credential'}</h3>
           <p className="institution">{credential.institution}</p>
+          {credential.holderName && <p className="institution">Holder: {credential.holderName}</p>}
         </div>
         <span className={`badge tone-${meta.tone}`}>{meta.label}</span>
       </header>
@@ -35,7 +36,7 @@ export function CredentialCard({ credential }) {
       )}
       <div className="link-columns">
         <UrlGroup title="Profile" urls={credential.profileUrls} />
-        <UrlGroup title="Verification sources" urls={credential.verificationUrls} />
+        <UrlGroup title="Pinned official sources" urls={credential.verificationUrls} />
       </div>
       {credential.submitter && (
         <p className="submitter">Submitted by <code>{credential.submitter}</code></p>
